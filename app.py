@@ -174,26 +174,14 @@ def form_page(err=""):
 <title>谷歌改区服务 · 资料填写</title>{CSS}</head><body><div class="wrap">
 <div class="card">
 <h1>谷歌改区服务 · 资料填写</h1>
-<p class="sub">拍下后填这张表，店主按你填的资料和你联系、帮你改区。带 * 的必填。</p>
+<p class="sub">填邮箱和想改到的地区就行。不要填密码。</p>
 {err_html}
 <form method="post" action="/submit">
 <label>要改区的谷歌邮箱 *</label>
 <input name="email" type="email" required placeholder="例如 abc@gmail.com" autocomplete="email">
-<label>账号当前地区 *</label>
-<select name="cur_region" required><option value="">请选择</option>{options(COUNTRIES)}</select>
-<label>想改到哪个地区 *</label>
+<label>更改地区（想改到哪个地区）*</label>
 <select name="target_region" required><option value="">请选择</option>{options(COUNTRIES)}</select>
-<label>用途（写申请理由用）</label>
-<select name="purpose">{options(PURPOSES)}</select>
-<label>你的联系方式（微信号 / QQ / 手机号）*</label>
-<input name="contact" required placeholder="店主靠这个联系你">
-<label>淘宝订单号（有就填，方便对单）</label>
-<input name="order_no" placeholder="可不填">
-<label>备注（想用的服务、其他说明）</label>
-<textarea name="note" placeholder="可不填"></textarea>
-<div class="warn">⚠️ <b>密码不要填在这里。</b>这张表只收邮箱和地区信息；真到登录那一步，密码只在谷歌官方页面由你本人输入，任何人问你要密码都不要给。</div>
 <button class="btn" type="submit">提交资料</button>
-<p class="small">提交后会给你一个查询编号，留好它，后面问进度报编号就行。</p>
 </form>
 </div></div></body></html>"""
 
@@ -204,10 +192,7 @@ def thanks_page(ref):
 <title>提交成功</title>{CSS}</head><body><div class="wrap">
 <div class="card">
 <h1>✅ 提交成功</h1>
-<p class="sub">你的查询编号是：</p>
-<p style="font-size:26px;font-weight:800;letter-spacing:1px;color:#4B3F8F;margin:6px 0">{esc(ref)}</p>
-<div class="warn ok">店主已经能收到你的资料了，会按你留的联系方式找你。问进度时报这个编号就行。</div>
-<p class="small">提醒：密码只在谷歌官方页面自己输入，不要发给任何人。</p>
+<p class="sub">店主已经收到你的资料了。</p>
 </div></div></body></html>"""
 
 
@@ -240,16 +225,15 @@ def admin_page(rows):
         t = time.strftime("%m-%d %H:%M", time.localtime(r["created_at"]))
         nxt = "待处理" if done else "已处理"
         trs.append(f"""<tr>
-<td>{esc(r['ref'])}<br><span class="small">{t}</span></td>
-<td>{esc(r['email'])}<br><span class="small">订单 {esc(r['order_no'] or '—')}</span></td>
-<td>{esc(r['cur_region'])} → <b>{esc(r['target_region'])}</b><br><span class="small">{esc(r['purpose'])}</span></td>
-<td>{esc(r['contact'])}<br><span class="small">{esc(r['note'] or '')}</span></td>
+<td>{t}</td>
+<td>{esc(r['email'])}</td>
+<td><b>{esc(r['target_region'])}</b></td>
 <td>{tag}</td>
 <td><div class="rowbtns">
 <form method="post" action="/admin/action"><input type="hidden" name="id" value="{r['id']}"><input type="hidden" name="op" value="toggle"><button class="mini" type="submit">标{nxt}</button></form>
 <form method="post" action="/admin/action" onsubmit="return confirm('删除这条？')"><input type="hidden" name="id" value="{r['id']}"><input type="hidden" name="op" value="delete"><button class="mini" type="submit">删</button></form>
 </div></td></tr>""")
-    body = "".join(trs) if trs else '<tr><td colspan="6" class="small">还没有客户提交。</td></tr>'
+    body = "".join(trs) if trs else '<tr><td colspan="5" class="small">还没有客户提交。</td></tr>'
     return f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>店主后台 · 客户资料</title>{CSS}</head><body><div class="wrap" style="max-width:920px">
@@ -257,7 +241,7 @@ def admin_page(rows):
 <h1>客户资料（共 {len(rows)} 条）</h1>
 <p class="sub">客户填表页就是本站首页，把本站链接发给客户即可。</p>
 <div style="overflow-x:auto"><table>
-<tr><th>编号/时间</th><th>邮箱/订单</th><th>改区</th><th>联系方式/备注</th><th>状态</th><th>操作</th></tr>
+<tr><th>时间</th><th>邮箱</th><th>更改地区</th><th>状态</th><th>操作</th></tr>
 {body}
 </table></div>
 </div></div></body></html>"""
@@ -324,18 +308,15 @@ class H(BaseHTTPRequestHandler):
                 self.send_html(429, form_page("提交太频繁，请过一会儿再试"))
                 return
             email = (f.get("email") or "").strip()
-            cur = (f.get("cur_region") or "").strip()
             tgt = (f.get("target_region") or "").strip()
-            contact = (f.get("contact") or "").strip()
-            if not email or "@" not in email or not cur or not tgt or not contact:
-                self.send_html(400, form_page("邮箱、当前地区、目标地区、联系方式都要填好再提交"))
+            if not email or "@" not in email or not tgt:
+                self.send_html(400, form_page("邮箱和更改地区都要填好再提交"))
                 return
             ref = "GX" + str(int(time.time()))[-6:] + secrets.token_hex(1).upper()
             conn = db()
             conn.execute(
                 "INSERT INTO submissions(ref,email,cur_region,target_region,purpose,contact,order_no,note,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
-                (ref, email[:120], cur, tgt, (f.get("purpose") or "")[:20], contact[:80],
-                 (f.get("order_no") or "")[:40], (f.get("note") or "")[:300], int(time.time())))
+                (ref, email[:120], "", tgt, "", "", "", "", int(time.time())))
             conn.commit()
             conn.close()
             self.send_html(200, thanks_page(ref))
